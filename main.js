@@ -1,5 +1,5 @@
-// main.js — 改良：难度选择（Easy/Normal/Hard）、更大命中半径、更明显视觉、点击锤子光标、命中飘字
-// 保持原有功能：Timed/Endless、特殊地鼠、localStorage 统计等
+// main.js — 改良：难度选择（Easy/Normal/Hard）、更大命中半径、更明显视觉、命中飘字
+// 注：已移除自定义光标和画布内锤子绘制（按要求撤回）
 
 (() => {
   // ---------- Utilities ----------
@@ -55,9 +55,6 @@
   let molePool = [];
   let particles = [];
   let floats = []; // floating score texts
-
-  // pointer for custom hammer drawing
-  let pointer = {x: 0, y: 0, visible:false};
 
   let audioCtx = null;
 
@@ -163,24 +160,6 @@
     // floats
     for(let i=floats.length-1;i>=0;i--){ const f=floats[i]; const age=now-f.born; if(age>f.life){ floats.splice(i,1); continue;} const a = 1 - age/f.life; ctx.font = 'bold 18px sans-serif'; ctx.fillStyle = `rgba(${f.color},${a})`; ctx.textAlign='center'; ctx.fillText(f.text, f.x, f.y + (age/1000)*f.vy); }}
 
-  // draw a simple hammer near pointer (canvas fallback for cursor)
-  function drawHammerAt(x,y){
-    const size = Math.max(22, canvasSize * 0.04);
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(-Math.PI/6);
-    // handle
-    ctx.fillStyle = '#6b3f2b';
-    ctx.fillRect(-size*0.05, size*0.12, size*0.12, size*0.8);
-    // head
-    ctx.fillStyle = '#333';
-    ctx.fillRect(-size*0.6, -size*0.25, size*0.9, size*0.4);
-    // highlight
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    ctx.fillRect(-size*0.2, -size*0.15, size*0.4, size*0.08);
-    ctx.restore();
-  }
-
   // ---------- Loop & rendering ----------
   let rafId = null;
   function startLoop(){ if(rafId) cancelAnimationFrame(rafId); rafId = requestAnimationFrame(loop); }
@@ -223,9 +202,6 @@
     updateParticles(nowMs, 16.67);
     drawParticles(nowMs);
 
-    // draw hammer pointer (canvas fallback) if running
-    if (pointer.visible && running){ drawHammerAt(pointer.x, pointer.y); }
-
     // UI updates
     if (modeSelect.value === 'timed'){ const remain = Math.max(0, Math.ceil((gameDuration*1000 - elapsed)/1000)); timerLabel.textContent = String(remain); if (elapsed >= gameDuration*1000 && activeMoles.length === 0 && events.length === 0){ endGame(); return; } } else { timerLabel.textContent = '—'; }
 
@@ -234,8 +210,7 @@
 
   // ---------- Game control ----------
   function startGame(){ if (running) return; if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); if (!audioCtx) ensureAudio(); score = 0; combo = 0; lastHitTs = 0; bestCombo = Math.max(bestCombo, combo); gamesPlayed = (loadStats().gamesPlayed||0); scoreEl.textContent = score; comboEl.textContent = combo; multEl.textContent = '1.0'; if (!seed) setSeedFromInput(); const seedNum = parseInt(seed) || hashStringToInt(seed); gameDuration = Math.max(5, Number(durationInput.value) || 30); events = generateEvents(seedNum, modeSelect.value); activeMoles = []; particles = []; floats = []; startTs = performance.now(); elapsedBeforePause = 0; paused = false; running = true; lives = (modeSelect.value==='endless' ? 3 : 0); livesEl.textContent = lives; livesRow.style.display = (modeSelect.value==='endless'?'block':'none'); startBtn.disabled = true; pauseBtn.disabled = false; pauseBtn.textContent='暂停'; modeLabel.textContent = (modeSelect.value==='timed'?'Timed':'Endless');
-    // set custom cursor using file in repo; also keep canvas fallback drawing
-    try{ canvas.style.cursor = "url('hammer.svg') 16 16, auto"; }catch(e){ }
+    canvas.style.cursor = 'default';
     startLoop(); }
 
   function pauseGame(){ if (!running) return; if (paused){ paused = false; const now = performance.now(); elapsedBeforePause += now - pauseTs; pauseTs = 0; pauseBtn.textContent = '暂停'; startLoop(); } else { paused = true; pauseTs = performance.now(); pauseBtn.textContent = '继续'; stopLoop(); }}
@@ -251,11 +226,6 @@
 
   canvas.addEventListener('click', e=>{ if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); if (!running) return; const pt=getMousePos(e); handleHitAtPoint(pt); }, {passive:true});
   canvas.addEventListener('touchstart', e=>{ e.preventDefault(); if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); if (!running) return; const pt=getMousePos(e); handleHitAtPoint(pt); }, {passive:false});
-
-  // pointer tracking for hammer drawing
-  canvas.addEventListener('mousemove', e=>{ const p = getMousePos(e); pointer.x = p.x; pointer.y = p.y; pointer.visible = true; });
-  canvas.addEventListener('mouseleave', ()=>{ pointer.visible = false; });
-  canvas.addEventListener('touchmove', e=>{ const p = getMousePos(e); pointer.x = p.x; pointer.y = p.y; pointer.visible = true; }, {passive:true});
 
   // ---------- Seed and UI ----------
   function setSeedFromInput(){ const v = seedInput.value.trim(); if (v===''){ seed = String(Math.floor(Math.random()*1e9)); } else { const n = Number(v); seed = Number.isFinite(n)? String(Math.floor(n)) : String(hashStringToInt(v)); } seedInput.value = seed; }
