@@ -1,0 +1,30 @@
+:root{
+  --bg:#0f1720;
+  --card:#0b1220;
+  --accent:#ffb86b;
+  --muted:#9aa4b2;
+  --panel:#0f1726;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Helvetica,Arial; background:linear-gradient(180deg,#071018 0%, #0b1420 100%); color:#e6eef6}
+.wrap{max-width:1100px;margin:24px auto;padding:18px}
+h1{margin:0 0 12px 0;font-size:28px}
+.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.scoreboard{font-size:18px;color:var(--accent);display:flex;gap:12px}
+.controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.controls input[type="text"], .controls input[type="number"], .controls select{padding:6px;border-radius:6px;border:1px solid #203040;background:#082029;color:#eaf6ff}
+.controls button{background:var(--accent);border:none;padding:8px 12px;border-radius:8px;color:#071018;font-weight:600;cursor:pointer}
+.controls button:active{transform:translateY(1px)}
+label.mute, label.vibrate{display:flex;align-items:center;gap:6px;color:var(--muted)}
+.game-area{display:flex;gap:12px;align-items:flex-start}
+canvas{background:linear-gradient(180deg,#05202a,#0a2a36);border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.6);max-width:100%;height:auto;touch-action:none}
+.side{width:300px;background:rgba(255,255,255,0.03);padding:12px;border-radius:10px;color:var(--muted)}
+.side h2{margin-top:0;color:var(--accent)}
+ol{padding-left:18px}
+footer{margin-top:14px;color:var(--muted);font-size:13px}
+.status{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.stat-actions{margin-top:8px}
+@media (max-width:900px){
+  .game-area{flex-direction:column-reverse}
+  .side{width:100%}
+}

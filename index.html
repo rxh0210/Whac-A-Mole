@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>打地鼠 — Whac-A-Mole</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>打地鼠</h1>
+    <div class="topbar">
+      <div class="scoreboard">
+        <div>分数: <span id="score">0</span></div>
+        <div>最高: <span id="highscore">0</span></div>
+      </div>
+      <div class="controls">
+        <label>模式
+          <select id="modeSelect">
+            <option value="timed">定时（Timed）</option>
+            <option value="endless">无尽（Endless）</option>
+          </select>
+        </label>
+        <label class="small">时长(s)
+          <input id="durationInput" type="number" min="5" max="300" value="30" />
+        </label>
+        <label>种子<input id="seedInput" type="text" placeholder="留空表示随机" /></label>
+        <button id="applySeed">应用</button>
+        <button id="startBtn">开始</button>
+        <button id="pauseBtn" disabled>暂停</button>
+        <button id="replayBtn">重玩</button>
+        <button id="shareBtn">复制带 seed 链接</button>
+        <label class="mute"><input id="mute" type="checkbox" />静音</label>
+        <label class="vibrate"><input id="vibrate" type="checkbox" />振动</label>
+      </div>
+    </div>
+
+    <div class="game-area">
+      <canvas id="game" width="900" height="900" role="img" aria-label="打地鼠画布"></canvas>
+      <aside class="side">
+        <h2>状态</h2>
+        <div class="status">
+          <div>模式: <span id="modeLabel">Timed</span></div>
+          <div>倒计时: <span id="timerLabel">30</span></div>
+          <div>连击: <span id="combo">0</span> x<span id="mult">1.0</span></div>
+          <div id="livesRow">生命: <span id="lives">3</span></div>
+          <div>最长连击: <span id="bestCombo">0</span></div>
+          <div>游戏次数: <span id="gamesPlayed">0</span></div>
+        </div>
+
+        <h2>排行榜 / 统计</h2>
+        <ol id="leaderboard"></ol>
+        <div class="stat-actions">
+          <button id="resetStats">重置统计</button>
+        </div>
+
+        <h3>说明</h3>
+        <ul>
+          <li>可在种子框输入数字并应用，分享链接将包含 seed。</li>
+          <li>移动端使用触摸，尽量放大点击区域提升命中率。</li>
+          <li>金色地鼠：高分；冻结地鼠：命中触发减速；炸弹：命中扣分/失去生命。</li>
+        </ul>
+      </aside>
+    </div>
+
+    <footer>
+      <small>静态演示 • 可通过 GitHub Pages 部署</small>
+    </footer>
+  </main>
+
+  <script src="main.js"></script>
+</body>
+</html>
