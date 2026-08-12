@@ -1,4 +1,4 @@
-// main.js — Pacing-only changes: ramp-up, per-difficulty minInterval & maxConcurrent, delay spawns when crowded
+// main.js — Pacing-only changes + improved mole/bomb graphics (canvas-drawn, more detailed)
 
 (() => {
   // ---------- Utilities ----------
@@ -184,6 +184,95 @@
     // floats
     for(let i=floats.length-1;i>=0;i--){ const f=floats[i]; const age=now-f.born; if(age>f.life){ floats.splice(i,1); continue;} const a = 1 - age/f.life; ctx.font = 'bold 18px sans-serif'; ctx.fillStyle = `rgba(${f.color},${a})`; ctx.textAlign='center'; ctx.fillText(f.text, f.x, f.y + (age/1000)*f.vy); }}
 
+  // ---------- Improved Graphics: mole & bomb drawing ----------
+  function drawMoleGraphic(ctx, x, y, r, type, prog, hit){
+    // x,y = center base position (where hole is); r = hole.r
+    // prog: 0..1 pop progress; hit: boolean
+    ctx.save();
+    // compute scale & vertical offset for pop effect
+    const scale = 0.9 + 0.4 * prog;
+    const yOffset = -r * 0.95 * (1 - prog) - (1 - Math.pow(1 - prog, 2)) * (r * 0.08);
+    ctx.translate(x, y + yOffset);
+    ctx.scale(scale, scale);
+
+    // shadow
+    ctx.beginPath(); ctx.fillStyle = 'rgba(0,0,0,0.36)'; ctx.ellipse(0, r*0.7, r*1.05, r*0.52, 0, 0, Math.PI*2); ctx.fill();
+
+    // body gradient (fur-like)
+    const bodyGrad = ctx.createLinearGradient(-r, -r, r, r);
+    if (type === 'gold'){
+      bodyGrad.addColorStop(0, '#ffefb2'); bodyGrad.addColorStop(1, '#f7c96e');
+    } else if (type === 'freeze'){
+      bodyGrad.addColorStop(0, '#bde6f7'); bodyGrad.addColorStop(1, '#6fb3d9');
+    } else if (type === 'bomb'){
+      bodyGrad.addColorStop(0, '#444'); bodyGrad.addColorStop(1, '#0a0a0a');
+    } else {
+      bodyGrad.addColorStop(0, '#d7a48d'); bodyGrad.addColorStop(1, '#b35f47');
+    }
+    ctx.beginPath(); ctx.fillStyle = bodyGrad; ctx.ellipse(0, -r*0.18, r*0.92, r*0.84, 0, 0, Math.PI*2); ctx.fill();
+
+    // subtle fur strokes (quick hack-ish texture)
+    ctx.save(); ctx.clip();
+    for(let i=0;i<6;i++){ ctx.beginPath(); ctx.strokeStyle = `rgba(0,0,0,${0.03 + i*0.02})`; ctx.lineWidth = 1; const rx = (i-3)*r*0.18; ctx.ellipse(rx, -r*0.2 + i*1.5, r*0.7 - i*3, r*0.35 + i*0.6, Math.PI*0.08*i, 0, Math.PI*2); ctx.stroke(); }
+    ctx.restore();
+
+    // ears
+    ctx.beginPath(); const earLGrad = ctx.createRadialGradient(-r*0.56, -r*0.9, r*0.06, -r*0.56, -r*1.02, r*0.5); earLGrad.addColorStop(0, '#ffd9c4'); earLGrad.addColorStop(1, '#8b4b3a'); ctx.fillStyle = earLGrad; ctx.ellipse(-r*0.55, -r*0.9, r*0.32, r*0.28, -0.25, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); const earRGrad = ctx.createRadialGradient(r*0.56, -r*0.9, r*0.06, r*0.56, -r*1.02, r*0.5); earRGrad.addColorStop(0, '#ffd9c4'); earRGrad.addColorStop(1, '#8b4b3a'); ctx.fillStyle = earRGrad; ctx.ellipse(r*0.55, -r*0.9, r*0.32, r*0.28, 0.25, 0, Math.PI*2); ctx.fill();
+
+    // nose & mouth
+    ctx.beginPath(); ctx.fillStyle = hit ? '#66d966' : '#3b1b18'; ctx.ellipse(0, -r*0.06, r*0.12, r*0.09, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.strokeStyle = 'rgba(20,10,8,0.9)'; ctx.lineWidth = 1.6; ctx.moveTo(-r*0.06, -r*0.02); ctx.quadraticCurveTo(0, r*0.06, r*0.2, r*0.12); ctx.moveTo(r*0.06, -r*0.02); ctx.quadraticCurveTo(0, r*0.06, -r*0.2, r*0.12); ctx.stroke();
+
+    // whiskers
+    ctx.strokeStyle = 'rgba(60,40,30,0.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-r*0.12, -r*0.02); ctx.lineTo(-r*0.7, -r*0.1); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-r*0.12, r*0.02); ctx.lineTo(-r*0.7, r*0.06); ctx.stroke(); ctx.beginPath(); ctx.moveTo(r*0.12, -r*0.02); ctx.lineTo(r*0.7, -r*0.1); ctx.stroke(); ctx.beginPath(); ctx.moveTo(r*0.12, r*0.02); ctx.lineTo(r*0.7, r*0.06); ctx.stroke();
+
+    // eyes with glossy highlight
+    ctx.beginPath(); ctx.fillStyle = '#060606'; ctx.ellipse(-r*0.22, -r*0.36, r*0.12, r*0.12, 0, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.fillStyle = '#060606'; ctx.ellipse(r*0.22, -r*0.36, r*0.12, r*0.12, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.ellipse(-r*0.16, -r*0.42, r*0.04, r*0.04, 0, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.ellipse(r*0.28, -r*0.42, r*0.04, r*0.04, 0, 0, Math.PI*2); ctx.fill();
+
+    // gold star for gold type
+    if (type==='gold'){
+      ctx.fillStyle='#fff'; ctx.font = `${r*0.6}px serif`; ctx.textAlign='center'; ctx.fillText('★', 0, -r*0.18);
+    }
+
+    ctx.restore();
+  }
+
+  function drawBombGraphic(ctx, x, y, r, prog){
+    // draw a more realistic bomb with glossy metal fuse
+    ctx.save();
+    const scale = 0.9 + 0.38 * prog;
+    const yOffset = -r * 0.95 * (1 - prog);
+    ctx.translate(x, y + yOffset);
+    ctx.scale(scale, scale);
+
+    // shadow
+    ctx.beginPath(); ctx.fillStyle = 'rgba(0,0,0,0.36)'; ctx.ellipse(0, r*0.7, r*1.05, r*0.5, 0, 0, Math.PI*2); ctx.fill();
+
+    // bomb body gradient
+    const g = ctx.createRadialGradient(-r*0.2, -r*0.2, r*0.1, 0,0,r*1.1);
+    g.addColorStop(0, '#666666'); g.addColorStop(0.6,'#111111'); g.addColorStop(1,'#000000');
+    ctx.beginPath(); ctx.fillStyle = g; ctx.arc(0, -r*0.2, r*0.78, 0, Math.PI*2); ctx.fill();
+
+    // glossy highlight
+    ctx.beginPath(); ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.ellipse(-r*0.28, -r*0.5, r*0.32, r*0.18, -0.6, 0, Math.PI*2); ctx.fill();
+
+    // metal cap
+    ctx.beginPath(); const capG = ctx.createLinearGradient(-r, -r*0.5, r, -r*0.5); capG.addColorStop(0,'#bbbbbb'); capG.addColorStop(1,'#777'); ctx.fillStyle = capG; ctx.ellipse(0, -r*0.98, r*0.22, r*0.12, 0, 0, Math.PI*2); ctx.fill();
+
+    // fuse
+    ctx.beginPath(); ctx.strokeStyle = '#6b3b1a'; ctx.lineWidth = 3; ctx.moveTo(0, -r*1.05); ctx.quadraticCurveTo(r*0.18, -r*1.32, r*0.5, -r*1.28); ctx.stroke();
+    // spark tip if near end
+    const sparkSize = 4 + Math.sin(performance.now()/80)*2;
+    ctx.beginPath(); ctx.fillStyle = '#ffd86b'; ctx.arc(r*0.5, -r*1.28, sparkSize/2, 0, Math.PI*2); ctx.fill();
+
+    // small 'B' label subtle
+    ctx.beginPath(); ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.font = `${r*0.28}px sans-serif`; ctx.textAlign='center'; ctx.fillText('B', 0, -r*0.1);
+
+    ctx.restore();
+  }
+
   // ---------- Loop & rendering ----------
   let rafId = null;
   function startLoop(){ if(rafId) cancelAnimationFrame(rafId); rafId = requestAnimationFrame(loop); }
@@ -219,19 +308,10 @@
       // pop progress
       let prog = 0; if (nowMs < s) prog = 0; else if (nowMs < s + appearIn) prog = (nowMs - s)/appearIn; else if (nowMs < e) prog = 1; else prog = Math.max(0, 1 - (nowMs - e)/200);
       m.popProgress = prog;
-      if (prog > 0.01){ const px = hole.x; const py = hole.y - hole.r * 0.95 * (1 - prog); const scale = 0.9 + 0.35 * prog; ctx.save(); ctx.translate(px, py); ctx.scale(scale, scale);
-          // stronger shadow
-          ctx.beginPath(); ctx.fillStyle = 'rgba(0,0,0,0.32)'; ctx.ellipse(0, hole.r*0.7, hole.r*1.05, hole.r*0.5,0,0,Math.PI*2); ctx.fill();
-          // body
-          let fill = '#d96f5d'; if (m.type==='gold') fill = '#ffd86b'; if (m.type==='freeze') fill = '#6fb3d9'; if (m.type==='bomb') fill = '#6c6c6c'; if (m.hit) fill = '#8ee78e';
-          ctx.beginPath(); ctx.fillStyle = fill; ctx.ellipse(0, -hole.r*0.2, hole.r*0.85, hole.r*0.78,0,0,Math.PI*2); ctx.fill();
-          // highlight
-          ctx.beginPath(); ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.ellipse(-hole.r*0.18, -hole.r*0.38, hole.r*0.16, hole.r*0.12,0,0,Math.PI*2); ctx.fill();
-          // eyes
-          ctx.fillStyle = '#071018'; ctx.beginPath(); ctx.ellipse(-hole.r*0.22,-hole.r*0.35, hole.r*0.12, hole.r*0.12,0,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(hole.r*0.22,-hole.r*0.35,hole.r*0.12,hole.r*0.12,0,0,Math.PI*2); ctx.fill();
-          // gold star
-          if (m.type==='gold'){ ctx.fillStyle='#fff'; ctx.font = `${hole.r*0.6}px serif`; ctx.textAlign='center'; ctx.fillText('★',0,-hole.r*0.2); }
-        ctx.restore(); }
+      if (prog > 0.01){ const px = hole.x; const py = hole.y - hole.r * 0.95 * (1 - prog); // draw according to type
+          if (m.type === 'bomb') drawBombGraphic(ctx, px, py, hole.r, prog);
+          else drawMoleGraphic(ctx, px, py, hole.r, m.type, prog, m.hit);
+        }
       // remove fully gone
       if (nowMs > m.end + 600) activeMoles.splice(i,1);
     }
@@ -260,7 +340,7 @@
   // ---------- Input handling ----------
   function getMousePos(evt){ const rect = canvas.getBoundingClientRect(); const clientX = evt.clientX || (evt.touches && evt.touches[0].clientX); const clientY = evt.clientY || (evt.touches && evt.touches[0].clientY); const x = clientX - rect.left; const y = clientY - rect.top; const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height; return {x: x*scaleX, y: y*scaleY}; }
 
-  function handleHitAtPoint(pt){ if (!running || paused) return; for(const hole of holes){ const dx = pt.x - hole.x, dy = pt.y - hole.y; if (Math.hypot(dx,dy) < hole.r * 1.4){ const now = performance.now(); const cand = activeMoles.find(m => m.hole === hole.index && m.popProgress > 0.18 && !m.hit && now < m.end); if (cand){ cand.hit = true; if (now - lastHitTs < 1000) { combo += 1; } else { combo = 1; } lastHitTs = now; bestCombo = Math.max(bestCombo, combo); const mult = 1 + Math.floor(combo/10)*0.5; let base = 10; if (cand.type==='gold') base = 50; if (cand.type==='bomb'){ score = Math.max(0, score - 30); playHit(false, 'bomb'); vibrate([120]); spawnParticles(hole.x, hole.y, '200,80,60', 18); spawnFloat(hole.x, hole.y - hole.r, '-30', '255,100,100'); } else { score += Math.round(base * mult); playHit(true, cand.type); vibrate([20]); spawnParticles(hole.x, hole.y, '255,220,120', (cand.type==='gold'?28:14)); spawnFloat(hole.x, hole.y - hole.r, `+${Math.round(base * mult)}`, '255,255,255'); } scoreEl.textContent = score; comboEl.textContent = combo; multEl.textContent = mult.toFixed(1); cand.end = performance.now() + 80; if (cand.type==='freeze'){ const freezeMs = 1200; for(const e of events){ e.time += freezeMs * 0.4 * (Math.random()+0.6); } } if (cand.type==='bomb' && modeSelect.value==='endless'){ lives = Math.max(0, lives-1); livesEl.textContent = lives; if (lives<=0){ endGame(); return; } } return; } else { score = Math.max(0, score - 1); playHit(false); vibrate([30]); combo = 0; comboEl.textContent = combo; multEl.textContent = '1.0'; scoreEl.textContent = score; return; } } } score = Math.max(0, score - 1); playHit(false); combo = 0; comboEl.textContent = combo; multEl.textContent = '1.0'; scoreEl.textContent = score; }
+  function handleHitAtPoint(pt){ if (!running || paused) return; for(const hole of holes){ const dx = pt.x - hole.x, dy = pt.y - hole.y; if (Math.hypot(dx,dy) < hole.r * 1.4){ const now = performance.now(); const cand = activeMoles.find(m => m.hole === hole.index && m.popProgress > 0.18 && !m.hit && now < m.end); if (cand){ cand.hit = true; if (now - lastHitTs < 1000) { combo += 1; } else { combo = 1; } lastHitTs = now; bestCombo = Math.max(bestCombo, combo); const mult = 1 + Math.floor(combo/10)*0.5; let base = 10; if (cand.type==='gold') base = 50; if (cand.type==='bomb'){ score = Math.max(0, score - 30); playHit(false, 'bomb'); vibrate([120]); spawnParticles(hole.x, hole.y, '120,120,120', 28); spawnFloat(hole.x, hole.y - hole.r, '-30', '255,100,100'); } else { score += Math.round(base * mult); playHit(true, cand.type); vibrate([20]); spawnParticles(hole.x, hole.y, '255,220,120', (cand.type==='gold'?28:14)); spawnFloat(hole.x, hole.y - hole.r, `+${Math.round(base * mult)}`, '255,255,255'); } scoreEl.textContent = score; comboEl.textContent = combo; multEl.textContent = mult.toFixed(1); cand.end = performance.now() + 80; if (cand.type==='freeze'){ const freezeMs = 1200; for(const e of events){ e.time += freezeMs * 0.4 * (Math.random()+0.6); } } if (cand.type==='bomb' && modeSelect.value==='endless'){ lives = Math.max(0, lives-1); livesEl.textContent = lives; if (lives<=0){ endGame(); return; } } return; } else { score = Math.max(0, score - 1); playHit(false); vibrate([30]); combo = 0; comboEl.textContent = combo; multEl.textContent = '1.0'; scoreEl.textContent = score; return; } } } score = Math.max(0, score - 1); playHit(false); combo = 0; comboEl.textContent = combo; multEl.textContent = '1.0'; scoreEl.textContent = score; }
 
   canvas.addEventListener('click', e=>{ if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); if (!running) return; const pt=getMousePos(e); handleHitAtPoint(pt); }, {passive:true});
   canvas.addEventListener('touchstart', e=>{ e.preventDefault(); if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); if (!running) return; const pt=getMousePos(e); handleHitAtPoint(pt); }, {passive:false});
