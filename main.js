@@ -104,7 +104,7 @@
   // ---------- Storage ----------
   function loadStats(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') }catch(e){return{}} }
   function saveStats(obj){ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj)); }
-  function applyStatsToUI(){ const s = loadStats(); const board = s.leaderboard || []; leaderboardEl.innerHTML = ''; board.slice(0,10).forEach(it=>{ const li=document.createElement('li'); li.textContent = `#${board.indexOf(it)+1} ${it.score} — seed:${it.seed} mode:${it.mode}`; leaderboardEl.appendChild(li); }); gamesPlayedEl.textContent = String(s.gamesPlayed || 0); bestComboEl.textContent = String(s.bestCombo || 0); highEl.textContent = String((s.highscore)||0); });
+  function applyStatsToUI(){ const s = loadStats(); const board = s.leaderboard || []; leaderboardEl.innerHTML = ''; board.slice(0,10).forEach(it=>{ const li=document.createElement('li'); li.textContent = `#${board.indexOf(it)+1} ${it.score} — seed:${it.seed} mode:${it.mode}`; leaderboardEl.appendChild(li); }); gamesPlayedEl.textContent = String(s.gamesPlayed || 0); bestComboEl.textContent = String(s.bestCombo || 0); highEl.textContent = String((s.highscore)||0); }
   function recordGameResult(mode, seedStr, scoreVal, localBestCombo){ const s = loadStats(); s.leaderboard = s.leaderboard||[]; s.leaderboard.push({score: scoreVal, seed: seedStr, mode: mode, ts: Date.now()}); s.gamesPlayed = (s.gamesPlayed||0)+1; s.bestCombo = Math.max(s.bestCombo||0, localBestCombo); s.highscore = Math.max(s.highscore||0, scoreVal); saveStats(s); applyStatsToUI(); }
   function resetStats(){ localStorage.removeItem(STORAGE_KEY); applyStatsToUI(); }
 
@@ -159,21 +159,7 @@
       const phase = t/durMs; // 0..1
       const holesCount = GRID_R*GRID_C;
       const hole = Math.floor(rngLocal()*holesCount);
-
-      // --- choose type with difficulty-aware probabilities ---
-      const difficultyLevel = (typeof difficultySelect !== 'undefined' && difficultySelect.value) ? difficultySelect.value : 'normal';
-      const probs = {
-        easy:   { gold: 0.03, freeze: 0.06, bomb: 0.10 },
-        normal: { gold: 0.025, freeze: 0.05, bomb: 0.15 },
-        hard:   { gold: 0.02, freeze: 0.04, bomb: 0.22 }
-      };
-      const p = probs[difficultyLevel] || probs.normal;
-      const r = rngLocal();
-      let type = 'normal';
-      if (r < p.gold) type = 'gold';
-      else if (r < p.gold + p.freeze) type = 'freeze';
-      else if (r < p.gold + p.freeze + p.bomb) type = 'bomb';
-
+      let type='normal'; const r = rngLocal(); if (r < 0.02) type='gold'; else if (r < 0.05) type='freeze'; else if (r < 0.08) type='bomb';
       const baseDur = 700 - Math.floor(phase*400);
       const duration = Math.max(120, baseDur + Math.floor(rngLocal()*400) + cfg.durationAdd);
       ev.push({time: t, hole, duration, type});
@@ -340,49 +326,4 @@
   }
 
   // ---------- Game control ----------
-  function startGame(){ if (running) return; if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); if (!audioCtx) ensureAudio(); score = 0; combo = 0; lastHitTs = 0; bestCombo = Math.max(bestCombo, 0); gamesPlayed++; events = generateEvents(Number(seed), modeSelect.value); events = events.map(ev=>({time: ev.time, hole: ev.hole, duration: ev.duration, type: ev.type})); running = true; paused = false; startTs = performance.now(); elapsedBeforePause = 0; pauseTs = 0; startBtn.disabled = true; pauseBtn.disabled = false; replayBtn.disabled = true; pauseBtn.textContent = '暂停'; canvas.style.cursor = 'default'; startLoop(); }
-
-  function pauseGame(){ if (!running) return; if (paused){ paused = false; const now = performance.now(); elapsedBeforePause += now - pauseTs; pauseTs = 0; pauseBtn.textContent = '暂停'; startLoop(); } else { paused = true; pauseTs = performance.now(); pauseBtn.textContent = '继续'; stopLoop(); } }
-
-  function endGame(){ running = false; stopLoop(); startBtn.disabled = false; pauseBtn.disabled = true; replayBtn.disabled = false; canvas.style.cursor = 'default'; const seedStr = String(seed); recordGameResult(modeSelect.value, seedStr, score, bestCombo); }
-
-  function replayGame(){ startGame(); }
-
-  // ---------- Input handling ----------
-  function getMousePos(evt){ const rect = canvas.getBoundingClientRect(); const clientX = evt.clientX || (evt.touches && evt.touches[0].clientX); const clientY = evt.clientY || (evt.touches && evt.touches[0].clientY); return {x: clientX - rect.left, y: clientY - rect.top}; }
-
-  function handleHitAtPoint(pt){ if (!running || paused) return; for(const hole of holes){ const dx = pt.x - hole.x, dy = pt.y - hole.y; if (Math.hypot(dx,dy) < hole.r * 1.4){ const now = performance.now(); // find top-most active mole in that hole
-      for(let i=activeMoles.length-1;i>=0;i--){ const m = activeMoles[i]; if (m.hole !== holes.indexOf(hole)) continue; if (m.hit) continue; if (now < m.start || now > m.end) continue; // valid hit
-          if (m.type === 'bomb'){ // penalty
-            playHit(false,'bomb'); vibrate([30]); score = Math.max(0, score - 20); spawnFloat(pt.x, pt.y, '-20','255,100,100'); lives = Math.max(0, lives - 1); if (modeSelect.value === 'endless' && lives <= 0){ endGame(); return; } }
-          else { // normal/gold/freeze
-            const ok = true; const points = (m.type==='gold')? 50 : 10; combo++; lastHitTs = now; bestCombo = Math.max(bestCombo, combo); const mult = 1 + Math.floor(combo/10); const gain = Math.floor(points * mult); score += gain; playHit(true, m.type); spawnParticles(pt.x, pt.y, m.type==='gold'?'255,220,100':'200,140,100'); spawnFloat(pt.x, pt.y, `+${gain}`, '255,255,255'); if (m.type === 'freeze'){ // slow down remaining events slightly
-              events.forEach(ev=>{ ev.time += 80; }); }
-          }
-          m.hit = true; break; } break; } } scoreEl.textContent = String(score); comboEl.textContent = String(combo); multEl.textContent = `x${1 + Math.floor(combo/10)}.0`; livesEl.textContent = String(lives); }
-
-  canvas.addEventListener('click', e=>{ if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); if (!running) return; const pt=getMousePos(e); handleHitAtPoint(pt); }, {passive:true});
-  canvas.addEventListener('touchstart', e=>{ e.preventDefault(); if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); if (!running) return; const pt=getMousePos(e); handleHitAtPoint(pt); }, {passive:false});
-
-  // ---------- Seed and UI ----------
-  function setSeedFromInput(){ const v = seedInput.value.trim(); if (v===''){ seed = String(Math.floor(Math.random()*1e9)); } else { const n = Number(v); seed = Number.isFinite(n)? String(Math.floor(n)): String(hashStringToInt(v)); } }
-  function hashStringToInt(s){ let h=2166136261>>>0; for(let i=0;i<s.length;i++) h=Math.imul(h ^ s.charCodeAt(i), 16777619); return h>>>0; }
-  function applySeedFromUrl(){ const params = new URLSearchParams(location.search); const us = params.get('seed'); if (us){ seed = us; seedInput.value = seed; } }
-
-  applySeedBtn.addEventListener('click', ()=>{ setSeedFromInput(); alert('已应用种子，开始游戏时将使用该种子生成关卡。'); });
-  startBtn.addEventListener('click', ()=>{ if (!seed) setSeedFromInput(); startGame(); });
-  pauseBtn.addEventListener('click', ()=>{ pauseGame(); });
-  replayBtn.addEventListener('click', ()=>{ replayGame(); });
-  shareBtn.addEventListener('click', async ()=>{ if (!seed) setSeedFromInput(); const url = new URL(location.href); url.searchParams.set('seed', seed); try{ await navigator.clipboard.writeText(url.toString()); alert('已复制链接到剪贴板'); }catch(e){ prompt('复制失败，请手动复制：', url.toString()); } });
-  resetStatsBtn.addEventListener('click', ()=>{ if(confirm('确认重置本地统计与排行榜？')){ resetStats(); } });
-  modeSelect.addEventListener('change', ()=>{ modeLabel.textContent = (modeSelect.value==='timed'?'Timed':'Endless'); livesRow.style.display = (modeSelect.value==='endless'?'block':'none'); });
-
-  // ---------- Startup ----------
-  function init(){ window.addEventListener('resize', resizeCanvas); resizeCanvas(); applySeedFromUrl(); applyStatsToUI(); seedInput.placeholder='留空表示随机 seed'; seedInput.addEventListener('keydown', e=>{ if(e.key==='Enter'){ setSeedFromInput(); alert('已应用种子，开始游戏时将使用该种子生成关卡。'); } }); }
-
-  init();
-
-  // expose helpers
-  window._whack = {generateEvents, mulberry32};
-
-})();
+  function startGame(){ if (running) return; if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); if (!audioCtx) ensureAudio(); score = 0; combo = 0; lastHitTs = 0; bestCombo = Math.m[...]
