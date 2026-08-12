@@ -24,6 +24,8 @@ ol{padding-left:18px}
 footer{margin-top:14px;color:var(--muted);font-size:13px}
 .status{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
 .stat-actions{margin-top:8px}
+/* floating score */
+.floating-score{position:absolute;pointer-events:none;color:#fff;font-weight:700;text-shadow:0 2px 6px rgba(0,0,0,0.6)}
 @media (max-width:900px){
   .game-area{flex-direction:column-reverse}
   .side{width:100%}

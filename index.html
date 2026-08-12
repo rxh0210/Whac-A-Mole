@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Whac-A-Mole</title>
+  <title>打地鼠 — Whac-A-Mole</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -23,6 +23,13 @@
         </label>
         <label class="small">时长(s)
           <input id="durationInput" type="number" min="5" max="300" value="30" />
+        </label>
+        <label>难度
+          <select id="difficultySelect">
+            <option value="easy">简单（Easy）</option>
+            <option value="normal" selected>普通（Normal）</option>
+            <option value="hard">困难（Hard）</option>
+          </select>
         </label>
         <label>种子<input id="seedInput" type="text" placeholder="留空表示随机" /></label>
         <button id="applySeed">应用</button>
