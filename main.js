@@ -1,5 +1,4 @@
-// main.js — 改良：难度选择（Easy/Normal/Hard）、更大命中半径、更明显视觉、命中飘字
-// 注：已移除自定义光标和画布内锤子绘制（按要求撤回）
+// main.js — Pacing-only changes: ramp-up, per-difficulty minInterval & maxConcurrent, delay spawns when crowded
 
 (() => {
   // ---------- Utilities ----------
@@ -119,11 +118,35 @@
     return {hole:holeIdx, start:startAbs, end:startAbs+durationMs, hit:false, popProgress:0, type:type, glowShown:false, glowStart: startAbs - 120};
   }
 
-  function difficultyConfig(mode){
+  // Difficulty/pacing configuration
+  function difficultyConfig(){
     const d = difficultySelect.value || 'normal';
-    if (d==='easy') return {intervalMul:1.5, durationAdd:250, earlyEase:1.6};
-    if (d==='hard') return {intervalMul:0.75, durationAdd:-150, earlyEase:0.9};
-    return {intervalMul:1.0, durationAdd:0, earlyEase:1.0};
+    if (d === 'easy') return {
+      intervalMul: 1.5,
+      durationAdd: 300,
+      // ramp-up: first 20% of time is slowed
+      rampFraction: 0.20,
+      rampMul: 1.6,
+      minInterval: 350,
+      maxConcurrent: 2
+    };
+    if (d === 'hard') return {
+      intervalMul: 0.75,
+      durationAdd: -120,
+      rampFraction: 0.12,
+      rampMul: 1.0,
+      minInterval: 140,
+      maxConcurrent: 4
+    };
+    // normal
+    return {
+      intervalMul: 1.0,
+      durationAdd: 0,
+      rampFraction: 0.18,
+      rampMul: 1.3,
+      minInterval: 220,
+      maxConcurrent: 3
+    };
   }
 
   function generateEvents(seedNum, mode){
@@ -142,9 +165,10 @@
       ev.push({time: t, hole, duration, type});
       // interval base
       let interval = 300 + Math.floor(rngLocal()*700) - Math.floor(phase*400);
-      // easier: make early part slower
-      if (phase < 0.12) interval = Math.floor(interval * cfg.earlyEase);
-      interval = Math.max(100, Math.floor(interval * cfg.intervalMul));
+      // apply ramp-up for early phase to slow initial spawns
+      if (phase < cfg.rampFraction) interval = Math.floor(interval * cfg.rampMul);
+      // apply difficulty multiplier and enforce minimum interval
+      interval = Math.max(cfg.minInterval, Math.floor(interval * cfg.intervalMul));
       t += interval;
       if (rngLocal() < 0.06) t += Math.floor(rngLocal()*120);
     }
@@ -168,7 +192,21 @@
     const elapsed = now - startTs + elapsedBeforePause; // ms since game start
 
     // spawn events -> convert to absolute timestamps
-    while(events.length && events[0].time <= elapsed){ const e = events.shift(); const startAbs = startTs + e.time; activeMoles.push(moleCreate(e.hole, startAbs, e.duration, e.type)); }
+    while(events.length && events[0].time <= elapsed){
+      const e = events.shift();
+      const cfg = difficultyConfig();
+      // if too many active moles, delay this event slightly instead of activating immediately
+      if (activeMoles.length >= cfg.maxConcurrent){
+        // small randomized delay to spread activations
+        const delay = 180 + Math.floor(Math.random()*160);
+        e.time += delay;
+        events.push(e);
+        events.sort((a,b)=>a.time-b.time);
+        continue;
+      }
+      const startAbs = startTs + e.time;
+      activeMoles.push(moleCreate(e.hole, startAbs, e.duration, e.type));
+    }
 
     // draw
     drawStatic();
