@@ -195,7 +195,10 @@
   function loop(now){ if (!running) return; if (paused){ rafId = requestAnimationFrame(loop); return; }
     const elapsed = now - startTs + elapsedBeforePause; // ms since game start
     // spawn events
-    while(events.length && events[0].time <= elapsed){ const e = events.shift(); activeMoles.push(moleCreate(e.hole, startTs + e.time - startTs, e.duration, e.type)); }
+    while(events.length && events[0].time <= elapsed){ const e = events.shift();
+      // NOTE: use absolute timestamps for mole start/end so comparisons with performance.now() work
+      activeMoles.push(moleCreate(e.hole, startTs + e.time, e.duration, e.type));
+    }
 
     // draw
     drawStatic();
