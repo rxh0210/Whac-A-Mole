@@ -1,5 +1,5 @@
-// main.js — 完整版静态打地鼠（Timed / Endless, combo, special moles, audio, vibration, particles, stats)
-// 无外部依赖，直接部署到 GitHub Pages
+// main.js — 诊断版本：在运行时输出 events/activeMoles 状态以定位“没有地鼠”的问题
+// 原始功能保持不变；仅增加少量日志用于调试。部署后请在 Console 查看以 "[WAM]" 开头的日志
 
 (() => {
   // ---------- Utilities ----------
@@ -39,6 +39,10 @@
   const bestComboEl = qs('#bestCombo');
   const gamesPlayedEl = qs('#gamesPlayed');
   const resetStatsBtn = qs('#resetStats');
+
+  // diagnostic flag
+  const DEBUG = true;
+  let _lastLogTime = 0;
 
   // ---------- Game config ----------
   const GRID_R = 3, GRID_C = 3;
@@ -194,6 +198,15 @@
   function stopLoop(){ if(rafId) cancelAnimationFrame(rafId); rafId = null; }
   function loop(now){ if (!running) return; if (paused){ rafId = requestAnimationFrame(loop); return; }
     const elapsed = now - startTs + elapsedBeforePause; // ms since game start
+
+    if (DEBUG){
+      const tnow = performance.now();
+      if (tnow - _lastLogTime > 1000){
+        console.log('[WAM] loop', {elapsed: Math.round(elapsed), eventsLen: events.length, activeLen: activeMoles.length});
+        _lastLogTime = tnow;
+      }
+    }
+
     // spawn events
     while(events.length && events[0].time <= elapsed){ const e = events.shift();
       // NOTE: use absolute timestamps for mole start/end so comparisons with performance.now() work
@@ -266,7 +279,11 @@
     // UI
     startBtn.disabled = true; pauseBtn.disabled = false; pauseBtn.textContent='暂停';
     modeLabel.textContent = (modeSelect.value==='timed'?'Timed':'Endless');
-    // stats count
+
+    if (DEBUG){
+      console.log('[WAM] startGame', {seed: seedNum, mode: modeSelect.value, eventsLen: events.length, eventsPreview: events.slice(0,6)});
+    }
+
     // play loop
     startLoop();
   }
