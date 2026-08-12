@@ -104,14 +104,14 @@
   // ---------- Storage ----------
   function loadStats(){ try{ return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') }catch(e){return{}} }
   function saveStats(obj){ localStorage.setItem(STORAGE_KEY, JSON.stringify(obj)); }
-  function applyStatsToUI(){ const s = loadStats(); const board = s.leaderboard || []; leaderboardEl.innerHTML = ''; board.slice(0,10).forEach(it=>{ const li=document.createElement('li'); li.textContent = `#${board.indexOf(it)+1} ${it.score} — seed:${it.seed} mode:${it.mode}`; leaderboardEl.appendChild(li); }); gamesPlayedEl.textContent = String(s.gamesPlayed || 0); bestComboEl.textContent = String(s.bestCombo || 0); highEl.textContent = String((s.highscore)||0); }
-  function recordGameResult(mode, seedStr, scoreVal, localBestCombo){ const s = loadStats(); s.leaderboard = s.leaderboard||[]; s.leaderboard.push({score: scoreVal, seed: seedStr, mode: mode, ts: Date.now()}); s.gamesPlayed = (s.gamesPlayed||0)+1; s.bestCombo = Math.max(s.bestCombo||0, localBestCombo); s.highscore = Math.max(s.highscore||0, scoreVal); saveStats(s); applyStatsToUI(); }
+  function applyStatsToUI(){ const s = loadStats(); const board = s.leaderboard || []; leaderboardEl.innerHTML = ''; board.slice(0,10).forEach(it=>{ const li=document.createElement('li'); li.textContent = `${it.score} — seed:${it.seed} (${it.mode})`; leaderboardEl.appendChild(li); }); highEl.textContent = (s.highscore||0); bestComboEl.textContent = (s.bestCombo||0); gamesPlayedEl.textContent = (s.gamesPlayed||0); }
+  function recordGameResult(mode, seedStr, scoreVal, localBestCombo){ const s = loadStats(); s.leaderboard = s.leaderboard||[]; s.leaderboard.push({score: scoreVal, seed: seedStr, mode: mode, ts: Date.now()}); s.leaderboard.sort((a,b)=>b.score-a.score); s.leaderboard = s.leaderboard.slice(0,50); s.highscore = Math.max(s.highscore||0, scoreVal); s.bestCombo = Math.max(s.bestCombo||0, localBestCombo||0); s.gamesPlayed = (s.gamesPlayed||0) + 1; saveStats(s); applyStatsToUI(); }
   function resetStats(){ localStorage.removeItem(STORAGE_KEY); applyStatsToUI(); }
 
   // ---------- Grid & drawing ----------
-  function resizeCanvas(){ const parentW = canvas.parentElement.clientWidth - 320; const w = Math.min(900, Math.max(300, parentW > 0 ? parentW : 600)); canvasSize = w; canvas.width = canvas.height = canvasSize; computeHoles(); }
-  function computeHoles(){ holes = []; const pad = canvasSize * 0.08; const usable = canvasSize - pad*2; const cellW = usable/GRID_C; const cellH = usable/GRID_R; const r = Math.min(cellW,cellH)*0.36; for(let ry=0;ry<GRID_R;ry++){ for(let cx=0;cx<GRID_C;cx++){ const x = pad + cx*cellW + cellW/2; const y = pad + ry*cellH + cellH/2; holes.push({x,y,r}); } } }
-  function drawStatic(){ ctx.clearRect(0,0,canvasSize,canvasSize); ctx.fillStyle='#052a2a'; ctx.fillRect(0,0,canvasSize,canvasSize); holes.forEach(h=>{ const g = ctx.createRadialGradient(h.x,h.y-h.r*0.36, h.r*0.2, h.x, h.y, h.r*1.2); g.addColorStop(0, 'rgba(0,0,0,0.0)'); g.addColorStop(1, 'rgba(0,0,0,0.45)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r*1.1, h.r*0.6, 0, 0, Math.PI*2); ctx.fill(); }); }
+  function resizeCanvas(){ const parentW = canvas.parentElement.clientWidth - 320; const w = Math.min(900, Math.max(300, parentW > 0 ? parentW : 600)); canvasSize = w; canvas.width = canvas.height = canvasSize; computeHoles(); drawStatic(); }
+  function computeHoles(){ holes = []; const pad = canvasSize * 0.08; const usable = canvasSize - pad*2; const cellW = usable/GRID_C; const cellH = usable/GRID_R; const r = Math.min(cellW,cellH)*0.38; for(let i=0;i<GRID_R;i++)for(let j=0;j<GRID_C;j++){const cx=pad+j*cellW+cellW/2; const cy=pad+i*cellH+cellH/2; holes.push({x:cx,y:cy,r:r,index:i*GRID_C+j}); } }
+  function drawStatic(){ ctx.clearRect(0,0,canvasSize,canvasSize); ctx.fillStyle='#052a2a'; ctx.fillRect(0,0,canvasSize,canvasSize); holes.forEach(h=>{ const g = ctx.createRadialGradient(h.x,h.y-h.r*0.2,h.r*0.2,h.x,h.y+h.r*0.5,h.r*1.4); g.addColorStop(0,'#0b2c2a'); g.addColorStop(1,'#031616'); ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(h.x,h.y+h.r*0.2,h.r*1.3,h.r*0.62,0,0,Math.PI*2); ctx.fill(); }); }
 
   // ---------- Mole system ----------
   function moleCreate(holeIdx, startAbs, durationMs, type='normal'){
@@ -159,21 +159,7 @@
       const phase = t/durMs; // 0..1
       const holesCount = GRID_R*GRID_C;
       const hole = Math.floor(rngLocal()*holesCount);
-
-      // --- choose type with difficulty-aware probabilities ---
-      const difficultyLevel = (typeof difficultySelect !== 'undefined' && difficultySelect.value) ? difficultySelect.value : 'normal';
-      const probs = {
-        easy:   { gold: 0.03, freeze: 0.06, bomb: 0.10 },
-        normal: { gold: 0.025, freeze: 0.05, bomb: 0.15 },
-        hard:   { gold: 0.02, freeze: 0.04, bomb: 0.22 }
-      };
-      const p = probs[difficultyLevel] || probs.normal;
-      const r = rngLocal();
-      let type = 'normal';
-      if (r < p.gold) type = 'gold';
-      else if (r < p.gold + p.freeze) type = 'freeze';
-      else if (r < p.gold + p.freeze + p.bomb) type = 'bomb';
-
+      let type='normal'; const r = rngLocal(); if (r < 0.02) type='gold'; else if (r < 0.05) type='freeze'; else if (r < 0.08) type='bomb';
       const baseDur = 700 - Math.floor(phase*400);
       const duration = Math.max(120, baseDur + Math.floor(rngLocal()*400) + cfg.durationAdd);
       ev.push({time: t, hole, duration, type});
@@ -191,12 +177,12 @@
   }
 
   // ---------- Particles & floats ----------
-  function spawnParticles(x,y,color,count=12){ for(let i=0;i<count;i++){ const angle = Math.random()*Math.PI*2; const speed = 30 + Math.random()*120; particles.push({x,y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, born:performance.now(), life:800, color}); } }
+  function spawnParticles(x,y,color,count=12){ for(let i=0;i<count;i++){ const angle = Math.random()*Math.PI*2; const speed = 30 + Math.random()*120; particles.push({x,y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, life:600 + Math.random()*200, born:performance.now(), color}); }}
   function spawnFloat(x,y,text,color='255,255,255'){ floats.push({x,y,text,color,born:performance.now(),life:900,vy:-30}); }
-  function updateParticles(now, dt){ for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; const age = now - p.born; if(age>p.life){ particles.splice(i,1); continue;} const t = dt/1000; p.vy += 80 * t; p.x += p.vx * t; p.y += p.vy * t; } for(let i=floats.length-1;i>=0;i--){ const f=floats[i]; const age=now-f.born; if(age>f.life){ floats.splice(i,1); continue;} f.y += f.vy * (dt/1000); } }
-  function drawParticles(now){ particles.forEach(p=>{ const age = now - p.born; const a = 1 - age/p.life; ctx.beginPath(); ctx.fillStyle = `rgba(${p.color},${a})`; ctx.arc(p.x,p.y,4*Math.max(0.6,1 - age/p.life), 0, Math.PI*2); ctx.fill(); });
+  function updateParticles(now, dt){ for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; const age = now - p.born; if(age>p.life){ particles.splice(i,1); continue;} const t = dt/1000; p.vy += 300*t; p.x += p.vx * t; p.y += p.vy * t; }}
+  function drawParticles(now){ particles.forEach(p=>{ const age = now - p.born; const a = 1 - age/p.life; ctx.beginPath(); ctx.fillStyle = `rgba(${p.color},${a})`; ctx.arc(p.x,p.y,4*Math.max(0.6,a),0,Math.PI*2); ctx.fill(); });
     // floats
-    for(let i=floats.length-1;i>=0;i--){ const f=floats[i]; const age=now-f.born; if(age>f.life){ floats.splice(i,1); continue;} const a = 1 - age/f.life; ctx.font = 'bold 18px sans-serif'; ctx.fillStyle = `rgba(${f.color},${a})`; ctx.fillText(f.text, f.x, f.y); } }
+    for(let i=floats.length-1;i>=0;i--){ const f=floats[i]; const age=now-f.born; if(age>f.life){ floats.splice(i,1); continue;} const a = 1 - age/f.life; ctx.font = 'bold 18px sans-serif'; ctx.fillStyle = `rgba(${f.color},${a})`; ctx.textAlign='center'; ctx.fillText(f.text, f.x, f.y + (age/1000)*f.vy); }}
 
   // ---------- Improved Graphics: mole & bomb drawing ----------
   function drawMoleGraphic(ctx, x, y, r, type, prog, hit){
@@ -227,22 +213,23 @@
 
     // subtle fur strokes (quick hack-ish texture)
     ctx.save(); ctx.clip();
-    for(let i=0;i<6;i++){ ctx.beginPath(); ctx.strokeStyle = `rgba(0,0,0,${0.03 + i*0.02})`; ctx.lineWidth = 1; const rx = (i-3)*r*0.18; ctx.ellipse(rx, -r*0.2 + i*1.5, r*0.7 - i*3, r*0.35 + i*0.06, 0, 0, Math.PI*2); ctx.stroke(); }
+    for(let i=0;i<6;i++){ ctx.beginPath(); ctx.strokeStyle = `rgba(0,0,0,${0.03 + i*0.02})`; ctx.lineWidth = 1; const rx = (i-3)*r*0.18; ctx.ellipse(rx, -r*0.2 + i*1.5, r*0.7 - i*3, r*0.35 + i*0.6, Math.PI*0.08*i, 0, Math.PI*2); ctx.stroke(); }
     ctx.restore();
 
     // ears
-    ctx.beginPath(); const earLGrad = ctx.createRadialGradient(-r*0.56, -r*0.9, r*0.06, -r*0.56, -r*1.02, r*0.5); earLGrad.addColorStop(0, '#ffd9c4'); earLGrad.addColorStop(1, '#8b4b3a'); ctx.fillStyle = earLGrad; ctx.ellipse(-r*0.56, -r*0.9, r*0.22, r*0.28, 0, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); const earRGrad = ctx.createRadialGradient(r*0.56, -r*0.9, r*0.06, r*0.56, -r*1.02, r*0.5); earRGrad.addColorStop(0, '#ffd9c4'); earRGrad.addColorStop(1, '#8b4b3a'); ctx.fillStyle = earRGrad; ctx.ellipse(r*0.56, -r*0.9, r*0.22, r*0.28, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); const earLGrad = ctx.createRadialGradient(-r*0.56, -r*0.9, r*0.06, -r*0.56, -r*1.02, r*0.5); earLGrad.addColorStop(0, '#ffd9c4'); earLGrad.addColorStop(1, '#8b4b3a'); ctx.fillStyle = earLGrad; ctx.ellipse(-r*0.55, -r*0.9, r*0.32, r*0.28, -0.25, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); const earRGrad = ctx.createRadialGradient(r*0.56, -r*0.9, r*0.06, r*0.56, -r*1.02, r*0.5); earRGrad.addColorStop(0, '#ffd9c4'); earRGrad.addColorStop(1, '#8b4b3a'); ctx.fillStyle = earRGrad; ctx.ellipse(r*0.55, -r*0.9, r*0.32, r*0.28, 0.25, 0, Math.PI*2); ctx.fill();
 
     // nose & mouth
     ctx.beginPath(); ctx.fillStyle = hit ? '#66d966' : '#3b1b18'; ctx.ellipse(0, -r*0.06, r*0.12, r*0.09, 0, 0, Math.PI*2); ctx.fill();
     ctx.beginPath(); ctx.strokeStyle = 'rgba(20,10,8,0.9)'; ctx.lineWidth = 1.6; ctx.moveTo(-r*0.06, -r*0.02); ctx.quadraticCurveTo(0, r*0.06, r*0.2, r*0.12); ctx.moveTo(r*0.06, -r*0.02); ctx.quadraticCurveTo(0, r*0.06, -r*0.2, r*0.12); ctx.stroke();
 
     // whiskers
-    ctx.strokeStyle = 'rgba(60,40,30,0.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-r*0.12, -r*0.02); ctx.lineTo(-r*0.7, -r*0.1); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-r*0.12, r*0.02); ctx.lineTo(-r*0.7, r*0.12); ctx.stroke(); ctx.beginPath(); ctx.moveTo(r*0.12, -r*0.02); ctx.lineTo(r*0.7, -r*0.1); ctx.stroke(); ctx.beginPath(); ctx.moveTo(r*0.12, r*0.02); ctx.lineTo(r*0.7, r*0.12); ctx.stroke();
+    ctx.strokeStyle = 'rgba(60,40,30,0.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-r*0.12, -r*0.02); ctx.lineTo(-r*0.7, -r*0.1); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-r*0.12, r*0.02); ctx.lineTo(-r*0.7, r*0.06); ctx.stroke(); ctx.beginPath(); ctx.moveTo(r*0.12, -r*0.02); ctx.lineTo(r*0.7, -r*0.1); ctx.stroke(); ctx.beginPath(); ctx.moveTo(r*0.12, r*0.02); ctx.lineTo(r*0.7, r*0.06); ctx.stroke();
 
     // eyes with glossy highlight
-    ctx.beginPath(); ctx.fillStyle = '#060606'; ctx.ellipse(-r*0.22, -r*0.36, r*0.12, r*0.12, 0, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.fillStyle = '#060606'; ctx.ellipse(r*0.22, -r*0.36, r*0.12, r*0.12, 0, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.ellipse(-r*0.16, -r*0.42, r*0.04, r*0.04, 0, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.ellipse(r*0.16, -r*0.42, r*0.04, r*0.04, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.fillStyle = '#060606'; ctx.ellipse(-r*0.22, -r*0.36, r*0.12, r*0.12, 0, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.fillStyle = '#060606'; ctx.ellipse(r*0.22, -r*0.36, r*0.12, r*0.12, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.ellipse(-r*0.16, -r*0.42, r*0.04, r*0.04, 0, 0, Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.ellipse(r*0.28, -r*0.42, r*0.04, r*0.04, 0, 0, Math.PI*2); ctx.fill();
 
     // gold star for gold type
     if (type==='gold'){
@@ -272,7 +259,7 @@
     ctx.beginPath(); ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.ellipse(-r*0.28, -r*0.5, r*0.32, r*0.18, -0.6, 0, Math.PI*2); ctx.fill();
 
     // metal cap
-    ctx.beginPath(); const capG = ctx.createLinearGradient(-r, -r*0.5, r, -r*0.5); capG.addColorStop(0,'#bbbbbb'); capG.addColorStop(1,'#777'); ctx.fillStyle = capG; ctx.ellipse(0, -r*0.98, r*0.2, r*0.12, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); const capG = ctx.createLinearGradient(-r, -r*0.5, r, -r*0.5); capG.addColorStop(0,'#bbbbbb'); capG.addColorStop(1,'#777'); ctx.fillStyle = capG; ctx.ellipse(0, -r*0.98, r*0.22, r*0.12, 0, 0, Math.PI*2); ctx.fill();
 
     // fuse
     ctx.beginPath(); ctx.strokeStyle = '#6b3b1a'; ctx.lineWidth = 3; ctx.moveTo(0, -r*1.05); ctx.quadraticCurveTo(r*0.18, -r*1.32, r*0.5, -r*1.28); ctx.stroke();
@@ -317,7 +304,7 @@
     for(let i=activeMoles.length-1;i>=0;i--){ const m = activeMoles[i]; const hole = holes[m.hole]; const appearIn = 120; const s = m.start; const e = m.end; // absolute
       // glow
       if (!m.glowShown && nowMs >= (m.glowStart || (s-120))){ m.glowShown = true; }
-      if (m.glowShown && nowMs < s){ const tTo = Math.max(0, s - nowMs); const a = clamp(1 - tTo/140, 0, 1); ctx.beginPath(); const g = ctx.createRadialGradient(hole.x, hole.y, hole.r*0.2, hole.x, hole.y, hole.r*1.2); g.addColorStop(0, `rgba(255,255,255,${a*0.18})`); g.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(hole.x, hole.y, hole.r*1.2, hole.r*0.6,0,0,Math.PI*2); ctx.fill(); }
+      if (m.glowShown && nowMs < s){ const tTo = Math.max(0, s - nowMs); const a = clamp(1 - tTo/140, 0, 1); ctx.beginPath(); const g = ctx.createRadialGradient(hole.x, hole.y, hole.r*0.2, hole.x, hole.y, hole.r*1.6); g.addColorStop(0, `rgba(255,255,255,${0.12*a})`); g.addColorStop(1, `rgba(255,255,255,${0.01*a})`); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(hole.x, hole.y - hole.r*0.1, hole.r*1.25 + 6*a, 0, Math.PI*2); ctx.fill(); }
       // pop progress
       let prog = 0; if (nowMs < s) prog = 0; else if (nowMs < s + appearIn) prog = (nowMs - s)/appearIn; else if (nowMs < e) prog = 1; else prog = Math.max(0, 1 - (nowMs - e)/200);
       m.popProgress = prog;
@@ -334,10 +321,49 @@
     drawParticles(nowMs);
 
     // UI updates
-    if (modeSelect.value === 'timed'){ const remain = Math.max(0, Math.ceil((gameDuration*1000 - elapsed)/1000)); timerLabel.textContent = String(remain); if (elapsed >= gameDuration*1000 && activeMoles.length===0){ endGame(); } }
+    if (modeSelect.value === 'timed'){ const remain = Math.max(0, Math.ceil((gameDuration*1000 - elapsed)/1000)); timerLabel.textContent = String(remain); if (elapsed >= gameDuration*1000 && activeMoles.length === 0 && events.length === 0){ endGame(); return; } } else { timerLabel.textContent = '—'; }
 
     rafId = requestAnimationFrame(loop);
   }
 
   // ---------- Game control ----------
-  function startGame(){ if (running) return; if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); if (!audioCtx) ensureAudio(); score = 0; combo = 0; lastHitTs = 0; bestCombo = Math.m[...];
+  function startGame(){ if (running) return; if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); if (!audioCtx) ensureAudio(); score = 0; combo = 0; lastHitTs = 0; bestCombo = Math.max(bestCombo, combo); gamesPlayed = (loadStats().gamesPlayed||0); scoreEl.textContent = score; comboEl.textContent = combo; multEl.textContent = '1.0'; if (!seed) setSeedFromInput(); const seedNum = parseInt(seed) || hashStringToInt(seed); gameDuration = Math.max(5, Number(durationInput.value) || 30); events = generateEvents(seedNum, modeSelect.value); activeMoles = []; particles = []; floats = []; startTs = performance.now(); elapsedBeforePause = 0; paused = false; running = true; lives = (modeSelect.value==='endless' ? 3 : 0); livesEl.textContent = lives; livesRow.style.display = (modeSelect.value==='endless'?'block':'none'); startBtn.disabled = true; pauseBtn.disabled = false; pauseBtn.textContent='暂停'; modeLabel.textContent = (modeSelect.value==='timed'?'Timed':'Endless');
+    canvas.style.cursor = 'default';
+    startLoop(); }
+
+  function pauseGame(){ if (!running) return; if (paused){ paused = false; const now = performance.now(); elapsedBeforePause += now - pauseTs; pauseTs = 0; pauseBtn.textContent = '暂停'; startLoop(); } else { paused = true; pauseTs = performance.now(); pauseBtn.textContent = '继续'; stopLoop(); }}
+
+  function endGame(){ running = false; stopLoop(); startBtn.disabled = false; pauseBtn.disabled = true; replayBtn.disabled = false; canvas.style.cursor = 'default'; const seedStr = String(seed); recordGameResult(modeSelect.value, seedStr, score, bestCombo); alert(`游戏结束！得分 ${score}`); }
+
+  function replayGame(){ startGame(); }
+
+  // ---------- Input handling ----------
+  function getMousePos(evt){ const rect = canvas.getBoundingClientRect(); const clientX = evt.clientX || (evt.touches && evt.touches[0].clientX); const clientY = evt.clientY || (evt.touches && evt.touches[0].clientY); const x = clientX - rect.left; const y = clientY - rect.top; const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height; return {x: x*scaleX, y: y*scaleY}; }
+
+  function handleHitAtPoint(pt){ if (!running || paused) return; for(const hole of holes){ const dx = pt.x - hole.x, dy = pt.y - hole.y; if (Math.hypot(dx,dy) < hole.r * 1.4){ const now = performance.now(); const cand = activeMoles.find(m => m.hole === hole.index && m.popProgress > 0.18 && !m.hit && now < m.end); if (cand){ cand.hit = true; if (now - lastHitTs < 1000) { combo += 1; } else { combo = 1; } lastHitTs = now; bestCombo = Math.max(bestCombo, combo); const mult = 1 + Math.floor(combo/10)*0.5; let base = 10; if (cand.type==='gold') base = 50; if (cand.type==='bomb'){ score = Math.max(0, score - 30); playHit(false, 'bomb'); vibrate([120]); spawnParticles(hole.x, hole.y, '120,120,120', 28); spawnFloat(hole.x, hole.y - hole.r, '-30', '255,100,100'); } else { score += Math.round(base * mult); playHit(true, cand.type); vibrate([20]); spawnParticles(hole.x, hole.y, '255,220,120', (cand.type==='gold'?28:14)); spawnFloat(hole.x, hole.y - hole.r, `+${Math.round(base * mult)}`, '255,255,255'); } scoreEl.textContent = score; comboEl.textContent = combo; multEl.textContent = mult.toFixed(1); cand.end = performance.now() + 80; if (cand.type==='freeze'){ const freezeMs = 1200; for(const e of events){ e.time += freezeMs * 0.4 * (Math.random()+0.6); } } if (cand.type==='bomb' && modeSelect.value==='endless'){ lives = Math.max(0, lives-1); livesEl.textContent = lives; if (lives<=0){ endGame(); return; } } return; } else { score = Math.max(0, score - 1); playHit(false); vibrate([30]); combo = 0; comboEl.textContent = combo; multEl.textContent = '1.0'; scoreEl.textContent = score; return; } } } score = Math.max(0, score - 1); playHit(false); combo = 0; comboEl.textContent = combo; multEl.textContent = '1.0'; scoreEl.textContent = score; }
+
+  canvas.addEventListener('click', e=>{ if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); if (!running) return; const pt=getMousePos(e); handleHitAtPoint(pt); }, {passive:true});
+  canvas.addEventListener('touchstart', e=>{ e.preventDefault(); if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); if (!running) return; const pt=getMousePos(e); handleHitAtPoint(pt); }, {passive:false});
+
+  // ---------- Seed and UI ----------
+  function setSeedFromInput(){ const v = seedInput.value.trim(); if (v===''){ seed = String(Math.floor(Math.random()*1e9)); } else { const n = Number(v); seed = Number.isFinite(n)? String(Math.floor(n)) : String(hashStringToInt(v)); } seedInput.value = seed; }
+  function hashStringToInt(s){ let h=2166136261>>>0; for(let i=0;i<s.length;i++) h=Math.imul(h ^ s.charCodeAt(i), 16777619); return h>>>0; }
+  function applySeedFromUrl(){ const params = new URLSearchParams(location.search); const us = params.get('seed'); if (us){ seed = us; seedInput.value = seed; } }
+
+  applySeedBtn.addEventListener('click', ()=>{ setSeedFromInput(); alert('已应用种子，开始游戏时将使用该种子生成关卡。'); });
+  startBtn.addEventListener('click', ()=>{ if (!seed) setSeedFromInput(); startGame(); });
+  pauseBtn.addEventListener('click', ()=>{ pauseGame(); });
+  replayBtn.addEventListener('click', ()=>{ replayGame(); });
+  shareBtn.addEventListener('click', async ()=>{ if (!seed) setSeedFromInput(); const url = new URL(location.href); url.searchParams.set('seed', seed); try{ await navigator.clipboard.writeText(url.toString()); shareBtn.textContent='已复制'; setTimeout(()=>shareBtn.textContent='复制带 seed 链接',1200); }catch(e){ prompt('复制此链接：', url.toString()); } });
+  resetStatsBtn.addEventListener('click', ()=>{ if(confirm('确认重置本地统计与排行榜？')){ resetStats(); } });
+  modeSelect.addEventListener('change', ()=>{ modeLabel.textContent = (modeSelect.value==='timed'?'Timed':'Endless'); livesRow.style.display = (modeSelect.value==='endless'?'block':'none'); });
+
+  // ---------- Startup ----------
+  function init(){ window.addEventListener('resize', resizeCanvas); resizeCanvas(); applySeedFromUrl(); applyStatsToUI(); seedInput.placeholder='留空表示随机 seed'; seedInput.addEventListener('keydown', e=>{ if(e.key==='Enter') applySeedBtn.click(); }); }
+
+  init();
+
+  // expose helpers
+  window._whack = {generateEvents, mulberry32};
+
+})();
