@@ -159,7 +159,21 @@
       const phase = t/durMs; // 0..1
       const holesCount = GRID_R*GRID_C;
       const hole = Math.floor(rngLocal()*holesCount);
-      let type='normal'; const r = rngLocal(); if (r < 0.02) type='gold'; else if (r < 0.05) type='freeze'; else if (r < 0.08) type='bomb';
+
+      // --- choose type with difficulty-aware probabilities ---
+      const difficultyLevel = (typeof difficultySelect !== 'undefined' && difficultySelect.value) ? difficultySelect.value : 'normal';
+      const probs = {
+        easy:   { gold: 0.03, freeze: 0.06, bomb: 0.10 },
+        normal: { gold: 0.025, freeze: 0.05, bomb: 0.15 },
+        hard:   { gold: 0.02, freeze: 0.04, bomb: 0.22 }
+      };
+      const p = probs[difficultyLevel] || probs.normal;
+      const r = rngLocal();
+      let type = 'normal';
+      if (r < p.gold) type = 'gold';
+      else if (r < p.gold + p.freeze) type = 'freeze';
+      else if (r < p.gold + p.freeze + p.bomb) type = 'bomb';
+
       const baseDur = 700 - Math.floor(phase*400);
       const duration = Math.max(120, baseDur + Math.floor(rngLocal()*400) + cfg.durationAdd);
       ev.push({time: t, hole, duration, type});
@@ -326,4 +340,4 @@
   }
 
   // ---------- Game control ----------
-  function startGame(){ if (running) return; if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); if (!audioCtx) ensureAudio(); score = 0; combo = 0; lastHitTs = 0; bestCombo = Math.m[...]
+  function startGame(){ if (running) return; if (audioCtx && audioCtx.state==='suspended') audioCtx.resume(); if (!audioCtx) ensureAudio(); score = 0; combo = 0; lastHitTs = 0; bestCombo = Math.m[...];
